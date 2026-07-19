@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Terminator
+Comment=Terminal emulator
+Exec=terminator
+Icon=terminator
+Terminal=false
+Categories=System;TerminalEmulator;
