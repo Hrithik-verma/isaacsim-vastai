@@ -115,19 +115,24 @@ external ports and doesn't provide an Instance Portal/Cloudflare tunnel for
 custom images (see
 [How this differs from Vast.ai's official desktop template](#how-this-differs-from-vastais-official-desktop-template)).
 
-1. **Templates → New Template.**
-2. **Image path:** `hrithik108/isaac-sim-vastai:5.0`.
-3. **Launch mode: `docker ENTRYPOINT`** — the image ships its own
-   `/usr/local/bin/entrypoint.sh` as `ENTRYPOINT`.
-4. **Docker Options:**
-   ```
-   -p 6901:6901 -p 22:22
-   ```
-5. **Environment variables:** set `VNC_PW` (required — no secure default).
-6. **Recommended disk space:** 30+ GB.
-7. Rent an **RTX GPU** offer, then find the **external port mapped to
-   internal 6901** on the instance card (it will *not* just be `6901`) and
-   open `https://<instance-ip>:<mapped-port>/`.
+On **Templates → New Template**, fill in:
+
+| Field | Value |
+|-------|-------|
+| **Image Path:Tag** | `hrithik108/isaac-sim-vastai:5.0` |
+| **Version Tag** | `5.0` |
+| **Select Launch Mode** | `Docker ENTRYPOINT` — the image ships its own `/usr/local/bin/entrypoint.sh` as `ENTRYPOINT`, so Vast.ai should run the container as-is |
+| **Ports** | add `6901` (TCP) and `22` (TCP) as separate entries |
+| **Environment Variables** | `VNC_PW` = *your chosen password* (required — there's no secure default) |
+| **Docker Options** | leave blank — the Ports table above handles this |
+| **On-start Script** | leave blank — `entrypoint.sh` already does everything |
+| **Disk Space** | 35 GB+ |
+| **Docker Repository Authentication** | leave blank — the image is public |
+
+Then rent an **RTX GPU** offer. On the instance card, find the **external
+port mapped to internal 6901** (Vast.ai assigns this randomly — it will
+*not* just be `6901`) and open `https://<instance-ip>:<mapped-port>/` in
+your browser. Log in with `kasm_user` / your `VNC_PW`.
 
 ## How this differs from Vast.ai's official desktop template
 
