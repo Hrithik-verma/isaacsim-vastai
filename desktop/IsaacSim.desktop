@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Isaac Sim (in this browser desktop)
+Comment=Runs Isaac Sim in a window on this desktop with ROS 2 Humble. Convenient, but the desktop capture path caps it near a quarter of native FPS — use "Isaac Sim — Streaming (fast)" when frame rate matters.
+Exec=terminator --title="Isaac Sim" -x /usr/local/bin/run-isaacsim.sh
+Icon=applications-science
+Terminal=false
+Categories=Development;Simulation;

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Launch Isaac Sim (pip/conda) GUI.
-# - Rendering goes through VirtualGL so GPU (Vulkan/RTX) frames are blitted into
-#   the VNC framebuffer (without vglrun the Kit window is blank over KasmVNC).
-# - The isaacsim.ros2.bridge needs Isaac's OWN bundled ROS 2 Humble libs on the
-#   library path (system ROS 2 has an ABI mismatch with the prebuilt bridge).
-#   We add them via a SCOPED LD_LIBRARY_PATH here -- NOT global ldconfig, which
-#   would break the system `ros2` CLI. $EXT/bin holds the bridge .so itself.
+# Launch Isaac Sim (pip/conda) into the streamed XFCE desktop.
+#
+# Rendering goes through VirtualGL against EGL, so Kit's Vulkan/RTX frames are
+# blitted into the Xvfb framebuffer, which Selkies then captures and encodes on
+# the GPU with NVENC. Without vglrun the Kit window comes up blank, because
+# Xvfb has no GPU-backed GLX of its own.
+#
+# For maximum FPS with no desktop at all, use run-isaacsim-stream.sh instead --
+# that path keeps frames on the GPU end to end.
 set -e
 
 ISAAC_ENV="${ISAAC_ENV:-env_isaacsim}"
@@ -14,10 +16,16 @@ conda activate "${ISAAC_ENV}"
 
 export ROS_DISTRO=humble
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-export OMNI_KIT_ALLOW_ROOT=1
 export ACCEPT_EULA=Y PRIVACY_CONSENT=Y OMNI_KIT_ACCEPT_EULA=YES
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
-mkdir -p "${XDG_RUNTIME_DIR}" && chmod 700 "${XDG_RUNTIME_DIR}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-ubuntu}"
+mkdir -p "${XDG_RUNTIME_DIR}" && chmod 700 "${XDG_RUNTIME_DIR}" 2>/dev/null || true
+
+# Don't let Kit block on the (nonexistent) display refresh.
+export __GL_SYNC_TO_VBLANK=0
+
+# The joystick interposer is LD_PRELOADed session-wide by the entrypoint for
+# games; Kit has no use for it and it only adds dlopen work per process.
+unset LD_PRELOAD
 
 # ROS 2 bridge library path (scoped to this process). Globbed to survive version
 # bumps (python3.11 vs 3.12, omni.usd.libs hash).
@@ -28,12 +36,12 @@ if [ -n "${SITE}" ]; then
     export LD_LIBRARY_PATH="${EXT}/bin:${EXT}/humble/lib:${USD_LIBS}:${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
 
-echo "[run-isaacsim] env=${ISAAC_ENV}"
+echo "[run-isaacsim] env=${ISAAC_ENV} display=${DISPLAY}"
 
-if command -v vglrun >/dev/null 2>&1 && [ -e /dev/dri/renderD128 ]; then
-    echo "[run-isaacsim] launching via VirtualGL: vglrun -d egl0 isaacsim"
-    exec vglrun -d egl0 isaacsim "$@"
+if command -v vglrun >/dev/null 2>&1; then
+    echo "[run-isaacsim] launching via VirtualGL: vglrun -d ${VGL_DISPLAY:-egl} isaacsim"
+    exec vglrun -d "${VGL_DISPLAY:-egl}" isaacsim "$@"
 else
-    echo "[run-isaacsim] VirtualGL/GPU render node unavailable; launching isaacsim directly (may render blank over VNC)"
+    echo "[run-isaacsim] VirtualGL unavailable; launching isaacsim directly (may render blank)"
     exec isaacsim "$@"
 fi

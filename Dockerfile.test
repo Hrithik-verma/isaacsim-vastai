@@ -1,4 +1,4 @@
-# Fast local smoke-test of the KasmVNC + KDE Plasma + entrypoint layer ONLY.
+# Fast local smoke-test of the KasmVNC + XFCE + entrypoint layer ONLY.
 # No Isaac Sim / no ROS / no GPU needed — just proves the desktop comes up on
 # port 6901 and the password/startup path (the part that crash-looped) works.
 #
@@ -13,9 +13,9 @@ SHELL ["/bin/bash", "-c"]
 ENV LANG=en_US.UTF-8 DISPLAY=:1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        kde-plasma-desktop kwin-x11 terminator dbus-x11 openssh-server \
+        xfce4 xfce4-terminal terminator xterm dbus-x11 openssh-server \
         curl wget ca-certificates net-tools locales \
-    && apt-get purge -y xscreensaver light-locker plasma-lockscreen 2>/dev/null || true \
+    && apt-get purge -y xfce4-power-manager light-locker xfce4-screensaver 2>/dev/null || true \
     && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,11 +27,9 @@ RUN cd /tmp \
 
 COPY vnc/xstartup /root/.vnc/xstartup
 COPY vnc/kasmvnc.yaml /root/.vnc/kasmvnc.yaml
-COPY vnc/kscreenlockerrc /root/.config/kscreenlockerrc
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /root/.vnc/xstartup /usr/local/bin/entrypoint.sh \
-    && mkdir -p /root/Desktop /root/.config/kdedefaults \
-    && kwriteconfig5 --file kdedefaults/kdeglobals --group General --key TerminalApplication terminator \
+    && mkdir -p /root/Desktop \
     && touch /root/.vnc/.de-was-selected
 
 EXPOSE 6901 22

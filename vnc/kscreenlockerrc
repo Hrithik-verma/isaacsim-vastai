@@ -1,8 +1,0 @@
-[Daemon]
-Autolock=false
-LockOnResume=false
-LockGrace=0
-Timeout=0
-
-[Greeter]
-Theme=org.kde.breeze.desktop

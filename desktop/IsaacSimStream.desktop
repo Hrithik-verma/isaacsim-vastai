@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Isaac Sim — Streaming (fast)
+Comment=Full-speed Isaac Sim: renders straight to NVENC, no desktop capture. Opens a window showing the address to type into the "Isaac Sim WebRTC Streaming Client" app. The viewport appears in that app, not on this desktop.
+Exec=terminator --title="Isaac Sim Streaming" --geometry=900x600 -x /usr/local/bin/run-isaacsim-stream.sh
+Icon=video-display
+Terminal=false
+Categories=Development;Simulation;
