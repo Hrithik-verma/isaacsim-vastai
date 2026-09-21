@@ -31,9 +31,19 @@ unset LD_PRELOAD
 # bumps (python3.11 vs 3.12, omni.usd.libs hash).
 SITE="$(python -c 'import isaacsim, os; print(os.path.dirname(isaacsim.__file__))' 2>/dev/null || true)"
 if [ -n "${SITE}" ]; then
-    EXT="${SITE}/exts/isaacsim.ros2.bridge"
+    # Glob every isaacsim.ros2.* extension rather than naming one: the layout
+    # moved in 6.x. Up to 5.x the bridge .so and the bundled distro libs lived
+    # in isaacsim.ros2.bridge/{bin,humble/lib}; from 6.0 the bridge is a
+    # meta-extension with no libraries, and they are spread over
+    # isaacsim.ros2.{core,nodes,control,tf_viewer}/bin plus
+    # isaacsim.ros2.core/humble/lib. Pointing at the old path makes
+    # isaacsim.ros2.core log "ROS2 Bridge startup failed".
+    ROS2_LIBS=""
+    for d in "${SITE}"/exts/isaacsim.ros2.*/bin "${SITE}"/exts/isaacsim.ros2.*/"${ROS_DISTRO}"/lib; do
+        [ -d "${d}" ] && ROS2_LIBS="${ROS2_LIBS:+${ROS2_LIBS}:}${d}"
+    done
     USD_LIBS="$(ls -d "${SITE}"/extscache/omni.usd.libs-*/bin 2>/dev/null | head -1)"
-    export LD_LIBRARY_PATH="${EXT}/bin:${EXT}/humble/lib:${USD_LIBS}:${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export LD_LIBRARY_PATH="${ROS2_LIBS}:${USD_LIBS}:${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
 
 echo "[run-isaacsim] env=${ISAAC_ENV} display=${DISPLAY}"
