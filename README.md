@@ -21,7 +21,7 @@ ghcr.io/selkies-project/nvidia-egl-desktop:22.04
 ```
 
 **One-click deploy:** [Isaac Sim 5.0 template](https://cloud.vast.ai?ref_id=612261&template_id=cf1a15d66acb6141e231ccbb24c5e19c)
-[Isaac Sim 6.1 template](https://cloud.vast.ai?ref_id=612261&template_id=2da1504ccddd5e8c363ba64d363080c2)
+, [Isaac Sim 6.1 template](https://cloud.vast.ai?ref_id=612261&template_id=2da1504ccddd5e8c363ba64d363080c2)
 
 ## Why it's split this way
 
