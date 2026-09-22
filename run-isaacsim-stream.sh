@@ -165,16 +165,40 @@ echo
           # READY fires within seconds and is wrong (and scrolls away).
           KITLOG="$(ls -t "${KITLOG_DIR}"/*.log 2>/dev/null | head -1)"
           not_ready=1
-          if [ -n "${KITLOG}" ] && grep -q 'app ready' "${KITLOG}" 2>/dev/null; then
+          # "App is loaded" is Isaac's OWN readiness marker, printed only after
+          # isaacsim.app.setup has the viewport handle in hand. Prefer it over
+          # the old 'app ready' + RtPso-silence heuristic, which never fired on
+          # a busy cloud host: the log there is written continuously, so it is
+          # never quiet for 25s and READY was simply unreachable.
+          if [ -n "${KITLOG}" ] && grep -q 'App is loaded' "${KITLOG}" 2>/dev/null; then
+              not_ready=0
+          elif [ -n "${KITLOG}" ] && grep -q 'app ready' "${KITLOG}" 2>/dev/null; then
               if tail -60 "${KITLOG}" 2>/dev/null | grep -q 'Waiting for RtPso'; then
-                  # Compiling: ready only once those lines stop being written.
                   if [ -z "$(find "${KITLOG}" -newermt '-25 seconds' 2>/dev/null)" ]; then
                       not_ready=0
                   fi
               elif [ "$(( $(date +%s) - start ))" -ge "${READY_GRACE:-45}" ]; then
-                  # No compilation seen and past the grace window -> warm cache.
                   not_ready=0
               fi
+          fi
+
+          # Fail loudly when the GPU cannot open an NVENC session. Isaac logs
+          # this and then silently drops every client, so the client reports
+          # only "the streamer data channel is closing" and you chase the
+          # network for hours. Seen on a Vast.ai host where CUDA worked fine
+          # but NVENC could not be opened at all -- not fixable from here; that
+          # host cannot stream and you need a different one.
+          if [ -n "${KITLOG}" ] && grep -q 'ENCODE_OPEN_FAILED' "${KITLOG}" 2>/dev/null; then
+              echo
+              echo "  =============================================================="
+              echo "  >>> THIS HOST CANNOT ENCODE VIDEO."
+              echo "  >>> Isaac reported NVST_DISCONN_SERVER_VIDEO_ENCODER_INIT_"
+              echo "  >>> CUDA_ENCODE_OPEN_FAILED: NVENC would not open, although"
+              echo "  >>> CUDA itself works. Every client will connect and then be"
+              echo "  >>> dropped with 'the streamer data channel is closing'."
+              echo "  >>> Nothing in this image can fix it -- rent another host."
+              echo "  =============================================================="
+              echo
           fi
           if [ "${not_ready}" -eq 0 ]; then
               echo

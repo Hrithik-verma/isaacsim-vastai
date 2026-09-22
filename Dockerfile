@@ -172,6 +172,26 @@ RUN /opt/conda/bin/conda config --set auto_activate_base false \
 #    /etc/entrypoint.sh, which is the file we override here.
 # ---------------------------------------------------------------------------
 USER 0
+# ---------------------------------------------------------------------------
+# Make `isaacsim` work from a plain terminal, not just the launcher scripts.
+#
+# Isaac Sim 6.x native modules need GLIBCXX_3.4.32+; Ubuntu 22.04 ships
+# libstdc++ 3.4.30 while the conda env has 3.4.36. Without conda's lib ahead of
+# the system one, ~20 extensions fail to import ("cannot import name ... from
+# (unknown location)"), the app never reaches "App is loaded", and Kit usually
+# dies a few seconds later with no obvious cause.
+#
+# Scoped to the env via activate.d, so it applies on `conda activate
+# env_isaacsim` and nowhere else. Only ${CONDA_PREFIX}/lib goes here -- Isaac's
+# bundled ROS 2 libs stay scoped to run-isaacsim*.sh, because putting those on
+# every shell's path breaks the system `ros2` CLI.
+RUN mkdir -p /opt/conda/envs/env_isaacsim/etc/conda/activate.d \
+    && printf '%s\n' \
+        '#!/bin/bash' \
+        'export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH:-}"' \
+        > /opt/conda/envs/env_isaacsim/etc/conda/activate.d/zz-isaacsim-libstdcxx.sh \
+    && chmod +x /opt/conda/envs/env_isaacsim/etc/conda/activate.d/zz-isaacsim-libstdcxx.sh
+
 COPY --chown=1000:1000 entrypoint.sh /etc/entrypoint.sh
 COPY --chown=1000:1000 run-isaacsim.sh /usr/local/bin/run-isaacsim.sh
 COPY --chown=1000:1000 run-isaacsim-stream.sh /usr/local/bin/run-isaacsim-stream.sh
@@ -224,11 +244,17 @@ ENV DESKTOP_SESSION=xfce \
 # Set KASMVNC_ENABLE=false to switch back to Selkies/NVENC WebRTC -- worth it
 # on a host where ports are NOT rewritten (local docker, or anywhere the
 # container has a genuinely routable address).
+# SELKIES_ENABLE_RESIZE=true: the desktop follows the browser window, so the
+# framebuffer and the viewport are 1:1 and nothing is scaled. With it off, a
+# browser at any zoom other than 100% -- or an OS at 125%/150% display scaling
+# -- maps clicks to the wrong place, and you hit the icon ABOVE the one you
+# clicked. It must be a CONTAINER env var: supervisord starts KasmVNC with the
+# container's environment, so it cannot be changed inside a running container.
 ENV KASMVNC_ENABLE=true \
     SELKIES_ENCODER=nvh264enc \
     SELKIES_FRAMERATE=60 \
     SELKIES_VIDEO_BITRATE=16000 \
-    SELKIES_ENABLE_RESIZE=false \
+    SELKIES_ENABLE_RESIZE=true \
     KASMVNC_THREADS=0 \
     DISPLAY_SIZEW=1920 \
     DISPLAY_SIZEH=1080 \
