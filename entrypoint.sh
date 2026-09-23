@@ -237,14 +237,37 @@ ext_for() {  # ext_for <internal_port> [udp]
   if [ -n "${DRV_MAJOR}" ] && [ "${DRV_MAJOR}" -ge 595 ] 2>/dev/null; then
       echo '[connect]'
       echo "[connect]   *** WARNING: GPU driver ${DRV} (595+). ***"
-      echo '[connect]   Isaac Sim 5.0 SEGFAULTS on this branch (crash in'
+      echo '[connect]   Isaac Sim SEGFAULTS on this branch (crash in'
       echo '[connect]   rtx.scenedb.plugin, exit code 139, right after "app ready").'
       echo '[connect]   This is a host driver issue -- nothing in this container'
       echo '[connect]   can work around it. Destroy the instance and pick a host on'
       echo '[connect]   575.x / 580.x (verified working).'
       echo '[connect]   The desktop and SSH still work; only Isaac will crash.'
   elif [ -n "${DRV}" ]; then
-      echo "[connect]   GPU driver ${DRV} -- OK for Isaac Sim 5.0."
+      echo "[connect]   GPU driver ${DRV} -- OK for Isaac Sim."
+  fi
+
+  # NVENC verdict, right here in the container log, so it is visible from the
+  # provider's "View Logs" panel without opening the desktop first. A host can
+  # run CUDA perfectly and still refuse to open an encode session (seen on
+  # rented RTX 3060s), and that is the difference between the stream working
+  # and a client that connects and is immediately dropped.
+  NVENC_PY="/opt/conda/envs/env_isaacsim/bin/python"
+  if [ -x "${NVENC_PY}" ] && [ -f /usr/local/bin/nvenc-check.py ]; then
+      if NVENC_OUT="$("${NVENC_PY}" /usr/local/bin/nvenc-check.py 2>&1)"; then
+          echo '[connect]'
+          echo '[connect]   NVENC: OK -- this host can run the Isaac Sim stream.'
+      else
+          echo '[connect]'
+          echo '[connect]   *** NVENC: UNAVAILABLE on this host. ***'
+          echo "[connect]   ${NVENC_OUT##*$'\n'}"
+          echo '[connect]   The Isaac Sim STREAM (2, below) cannot work here: a'
+          echo '[connect]   client connects and is dropped with "the streamer data'
+          echo '[connect]   channel is closing". CUDA working does not mean NVENC'
+          echo '[connect]   works. The BROWSER DESKTOP (1, below) is unaffected --'
+          echo '[connect]   it encodes on the CPU. For the fast stream, rent a'
+          echo '[connect]   different host (datacenter GPUs are a safer bet).'
+      fi
   fi
   echo '[connect]'
   if [ "$(echo ${KASMVNC_ENABLE:-true} | tr '[:upper:]' '[:lower:]')" = "true" ]; then

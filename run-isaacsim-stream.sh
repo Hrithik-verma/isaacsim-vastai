@@ -33,8 +33,14 @@ PORT_SIGNALING=49100
 # this image can fix that; the host cannot encode and has to be replaced.
 # Set SKIP_NVENC_CHECK=1 to launch anyway.
 # ---------------------------------------------------------------------------
-if [ "${SKIP_NVENC_CHECK:-0}" != "1" ] && [ -f /usr/local/bin/nvenc-check.py ]; then
-    if ! python /usr/local/bin/nvenc-check.py; then
+# Use the env's interpreter by absolute path: this runs BEFORE `conda
+# activate` below, so a bare `python` is not on PATH yet and the check would
+# fail with "command not found" -- condemning every host, including healthy
+# ones. Skip the check rather than guess if that interpreter is missing.
+NVENC_PY="/opt/conda/envs/${ISAAC_ENV:-env_isaacsim}/bin/python"
+if [ "${SKIP_NVENC_CHECK:-0}" != "1" ] && [ -f /usr/local/bin/nvenc-check.py ] \
+   && [ -x "${NVENC_PY}" ]; then
+    if ! "${NVENC_PY}" /usr/local/bin/nvenc-check.py; then
         echo
         echo "  =============================================================="
         echo "  >>> THIS HOST CANNOT ENCODE VIDEO (NVENC session open failed)."
