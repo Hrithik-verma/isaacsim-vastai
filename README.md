@@ -178,7 +178,20 @@ one.
 
 ## Running on a Vast.ai VM (rather than their docker instances)
 
-Use `./vm-bootstrap.sh` on a fresh VM:
+Paste the ssh line the provider gives you into `./vm-setup.sh`, from your own
+machine, and it does the rest:
+
+```bash
+./vm-setup.sh 'ssh -p 15217 root@76.27.73.50' --tailscale-key tskey-auth-...
+```
+
+It pulls host and port out of that line (extra flags like `-L 8080:...` are
+ignored), copies `vm-bootstrap.sh` over, runs it, and -- if the VM needs the
+reboot described below -- waits for it to come back and resumes. Typing the
+host by hand is the main way this goes wrong: a one-digit typo just hangs on a
+TCP connect and looks like the script is stuck.
+
+To run it on the VM directly instead:
 
 ```bash
 scp -P <port> vm-bootstrap.sh root@<host>:/root/
