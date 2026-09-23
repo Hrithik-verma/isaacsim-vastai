@@ -21,6 +21,37 @@ set -u
 trap '' HUP
 
 PORT_SIGNALING=49100
+
+# ---------------------------------------------------------------------------
+# NVENC preflight. Isaac cannot stream without it, and without this check the
+# failure surfaces minutes later as a client that connects and is immediately
+# dropped ("the streamer data channel is closing") -- which looks like a
+# network problem and is not one.
+#
+# Two rented Vast.ai RTX 3060 hosts failed here while CUDA worked perfectly:
+# nvEncOpenEncodeSessionEx returned 2 (NV_ENC_ERR_NO_ENCODE_DEVICE). Nothing in
+# this image can fix that; the host cannot encode and has to be replaced.
+# Set SKIP_NVENC_CHECK=1 to launch anyway.
+# ---------------------------------------------------------------------------
+if [ "${SKIP_NVENC_CHECK:-0}" != "1" ] && [ -f /usr/local/bin/nvenc-check.py ]; then
+    if ! python /usr/local/bin/nvenc-check.py; then
+        echo
+        echo "  =============================================================="
+        echo "  >>> THIS HOST CANNOT ENCODE VIDEO (NVENC session open failed)."
+        echo "  >>>"
+        echo "  >>> Isaac Sim streaming is impossible here. A client would"
+        echo "  >>> connect and be dropped with 'the streamer data channel is"
+        echo "  >>> closing'. CUDA working does NOT mean NVENC works."
+        echo "  >>>"
+        echo "  >>> Rent a different host and run this check again, or use the"
+        echo "  >>> browser desktop on :8080 instead (CPU encoded, ~20 FPS)."
+        echo "  >>> Override with SKIP_NVENC_CHECK=1 to start anyway."
+        echo "  =============================================================="
+        echo
+        read -r -p "  Press Enter to close this window. "
+        exit 1
+    fi
+fi
 PORT_HTTP=8011
 
 # ---------------------------------------------------------------------------
@@ -242,6 +273,7 @@ isaacsim "${EXPERIENCE}" \
     --no-window \
     --/app/livestream/allowDynamicResize=true \
     --/app/window/drawMouse=true \
+    --/log/channels/"omni.kit.livestream.streamsdk"=error \
     "$@" 2>&1 | tee "${STREAM_LOG}"
 rc=${PIPESTATUS[0]}
 
