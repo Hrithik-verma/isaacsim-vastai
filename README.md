@@ -176,6 +176,46 @@ private window. The KasmVNC page has `<title>KasmVNC</title>`.
 49100; the window attaches to that instance's log instead of starting a second
 one.
 
+## Running on a Vast.ai VM (rather than their docker instances)
+
+Use `./vm-bootstrap.sh` on a fresh VM:
+
+```bash
+scp -P <port> vm-bootstrap.sh root@<host>:/root/
+ssh -p <port> root@<host> '/root/vm-bootstrap.sh --tailscale-key tskey-auth-...'
+```
+
+It installs the NVIDIA container toolkit, checks the driver, brings up
+Tailscale, pulls this image and starts it, then prints the connect details and
+the NVENC verdict.
+
+**Why a VM and not a docker instance.** Vast's docker hosts share one GPU
+between tenants. GeForce cards cap concurrent NVENC sessions, and you cannot
+see other tenants' sessions from inside your container -- so the stream fails
+with `NVST_DISCONN_SERVER_VIDEO_ENCODER_INIT_CUDA_ENCODE_OPEN_FAILED` while
+CUDA works perfectly. Measured on five separate hosts. The same GeForce class
+in a VM, with the GPU to itself, opens an encode session immediately. The
+browser desktop is unaffected either way; it encodes on the CPU.
+
+**Two things a fresh Vast VM gets wrong**, both handled by the script:
+
+- No NVIDIA container toolkit, so `docker run --gpus all` fails with
+  `could not select device driver "" with capabilities: [[gpu]]`.
+- The booted kernel module and the apt userspace driver are different versions
+  (seen: module 580.95.05, libraries 580.178.04). CUDA tolerates it -- so
+  `nvidia-smi` looks fine and NVENC even opens -- but **Vulkan refuses**, and
+  Isaac falls back to llvmpipe and dies with `vkAllocateMemory failed` /
+  `Failed to allocate a buffer for the streamer`. Rebooting loads the matching
+  DKMS module. The script stops and tells you, rather than letting that surface
+  as a phantom Isaac bug.
+
+**Pick the host on network, not just GPU.** A working host can still stream
+badly. Measured on a 4060 Ti VM in England from India: NVENC encoding at 59
+FPS, GPU at 40% -- and it still felt slow, because the link was **160 ms RTT
+and 7.4 Mbps** (a home broadband line). 1080p60 wants roughly 15-30 Mbps up and
+RTT under ~60 ms. Check the listing's *Net up* and location before renting, and
+drop the client to 1280x720 on a thin link.
+
 ## Isaac Sim version / upgrading
 
 Isaac Sim is pip-installed into an isolated conda env, so the version is just a
