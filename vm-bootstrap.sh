@@ -170,19 +170,46 @@ docker run -d --name isaacsim --gpus all \
     -p 8080:8080 -p 49100:49100 -p 47998:47998/udp \
     "${IMAGE}" >/dev/null
 echo "  waiting for the desktop to come up"
+# `curl ... && break` returns non-zero while the desktop is still starting,
+# and with `set -e` that quietly killed the script before the banner below --
+# the run looked like it just stopped after "waiting for the desktop".
+desktop_up=0
 for _ in $(seq 1 30); do
     sleep 5
-    curl -s -o /dev/null --max-time 3 http://localhost:8080/ && break
+    if curl -s -o /dev/null --max-time 3 http://localhost:8080/; then desktop_up=1; break; fi
+done
+[ "${desktop_up}" -eq 1 ] && echo "  desktop is up" \
+    || echo "  desktop not answering yet -- it may still be starting; details below anyway"
+
+set +e   # nothing below is worth aborting the summary for
+
+# The container writes its connect banner (including the NVENC verdict) a few
+# seconds after start; give it a moment rather than printing an empty summary.
+for _ in $(seq 1 20); do
+    docker logs isaacsim 2>&1 | grep -q "\[connect\].*NVENC" && break
+    sleep 3
 done
 
+# Which address to tell the user. `hostname -I` on these VMs returns the NAT
+# address (10.0.2.15) which is useless from outside, so prefer Tailscale, then
+# the public address, and say plainly when ports may not be reachable there.
+PUB_IP="$(curl -fsS --max-time 8 https://api.ipify.org 2>/dev/null)"
+CONNECT_IP="${TS_IP:-${PUB_IP:-$(hostname -I 2>/dev/null | awk '{print $1}')}}"
 echo
 echo "=============================================================="
 docker logs isaacsim 2>&1 | grep -E "\[connect\].*(NVENC|GPU driver)" | sed 's/^\[connect\]  */  /'
 echo
-echo "  Desktop : http://${TS_IP:-<host-ip>}:8080    (ubuntu / ${PASSWD_VAL})"
+echo "  Desktop : http://${CONNECT_IP:-<host-ip>}:8080    (ubuntu / ${PASSWD_VAL})"
 echo "  Stream  : run the 'Isaac Sim - Streaming (fast)' desktop icon,"
 echo "            wait for '>>> READY', then point the NVIDIA WebRTC"
-echo "            client at ${TS_IP:-<host-ip>}  port 49100"
+echo "            client at ${CONNECT_IP:-<host-ip>}  port 49100"
+if [ -z "${TS_IP}" ]; then
+    echo
+    echo "  NOTE: no Tailscale. ${CONNECT_IP} is this host's public address, but"
+    echo "  providers usually do NOT open 8080/49100 on it -- use the mapped"
+    echo "  ports from your provider's console, or re-run with --tailscale-key"
+    echo "  (which also carries the stream's UDP media that SSH cannot)."
+fi
 echo
 echo "  If the stream looks slow, it is almost always the network, not the"
 echo "  GPU: check the round-trip time and the host's upload bandwidth."
