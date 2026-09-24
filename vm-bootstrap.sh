@@ -100,6 +100,12 @@ say "4/6  Docker + NVIDIA container toolkit"
 command -v docker >/dev/null || { curl -fsSL https://get.docker.com | sh >/dev/null 2>&1; }
 if ! command -v nvidia-ctk >/dev/null; then
     echo "  installing nvidia-container-toolkit (without it --gpus all fails)"
+    # Pin the driver packages first. Installing the toolkit pulls an apt
+    # update, and Ubuntu then happily upgrades nvidia-utils / kernel-source to
+    # a newer point release while the OLD module is still loaded. Userspace and
+    # kernel then disagree and even nvidia-smi dies with
+    # "Failed to initialize NVML: Driver/library version mismatch".
+    apt-mark hold 'nvidia-*' 'libnvidia-*' >/dev/null 2>&1 || true
     curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
         | gpg --batch --yes --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
     curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
@@ -115,6 +121,21 @@ fi
 # script has frozen. busybox is enough -- the failure being checked for is
 # dockerd refusing the device request ("could not select device driver"),
 # which happens before the container's own filesystem matters.
+# Re-check: the apt work above can itself introduce the mismatch.
+KVER2="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' /proc/driver/nvidia/version 2>/dev/null | head -1)"
+UVER2="$(ls /usr/lib/x86_64-linux-gnu/libGLX_nvidia.so.* 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+if [ -n "${KVER2}" ] && [ -n "${UVER2}" ] && [ "${KVER2}" != "${UVER2}" ]; then
+    echo "  *** apt upgraded the driver userspace (${UVER2}) past the running"
+    echo "  *** kernel module (${KVER2}). nvidia-smi and docker will both fail"
+    echo "  *** until the matching module is loaded."
+    if [ "${AUTO_REBOOT}" -eq 1 ]; then
+        echo "  *** rebooting; re-run this script when it comes back."
+        sleep 3; reboot; exit 0
+    fi
+    echo "  *** Run:  reboot     then re-run this script."
+    exit 1
+fi
+
 if docker run --rm --gpus all busybox true >/dev/null 2>&1; then
     echo "  docker can reach the GPU"
 else
