@@ -44,6 +44,13 @@ while [ $# -gt 0 ]; do
 done
 
 say() { printf '\n=== %s\n' "$*"; }
+
+# One at a time. Two copies race on apt and each start their own 40GB pull.
+exec 9>/var/lock/isaacsim-bootstrap.lock
+if ! flock -n 9; then
+    echo "another vm-bootstrap.sh is already running on this host; watch that one instead"
+    exit 1
+fi
 [ "$(id -u)" -eq 0 ] || { echo "run as root (Vast VMs give you root)"; exit 1; }
 
 # ---------------------------------------------------------------------------
@@ -103,9 +110,18 @@ if ! command -v nvidia-ctk >/dev/null; then
     nvidia-ctk runtime configure --runtime=docker >/dev/null 2>&1
     systemctl restart docker; sleep 5
 fi
-docker run --rm --gpus all --entrypoint nvidia-smi "${IMAGE}" -L >/dev/null 2>&1 \
-    && echo "  docker can reach the GPU" \
-    || echo "  (will verify after the image is pulled)"
+# Validate GPU passthrough with a 4MB image, NOT the Isaac image: using
+# ${IMAGE} here silently pulls 40GB (output suppressed) and looks like the
+# script has frozen. busybox is enough -- the failure being checked for is
+# dockerd refusing the device request ("could not select device driver"),
+# which happens before the container's own filesystem matters.
+if docker run --rm --gpus all busybox true >/dev/null 2>&1; then
+    echo "  docker can reach the GPU"
+else
+    echo "  *** docker cannot use the GPU even after installing the toolkit."
+    echo "  *** Check: docker run --rm --gpus all busybox true"
+    exit 1
+fi
 
 # ---------------------------------------------------------------------------
 say "5/6  Tailscale (carries the stream's UDP media; SSH tunnels cannot)"
@@ -123,7 +139,7 @@ fi
 # ---------------------------------------------------------------------------
 say "6/6  Isaac Sim container"
 if [ "${RUN_CONTAINER}" -eq 0 ]; then echo "  --no-run given; stopping here"; exit 0; fi
-echo "  pulling ${IMAGE} (~40GB on a cold VM)"
+echo "  pulling ${IMAGE} (~40GB on a cold VM; progress below)"
 docker pull "${IMAGE}"
 docker rm -f isaacsim >/dev/null 2>&1 || true
 docker run -d --name isaacsim --gpus all \
